@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Parlament – Editor</title>
+  <style>
+    :root{
+      --bg: #0b0b0f;
+      --panel: #15151b;
+      --card: #1b1b22;
+      --stroke: rgba(255,255,255,.16);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.62);
+      --muted2: rgba(255,255,255,.45);
+      --shadow: 0 18px 40px rgba(0,0,0,.45);
+      --danger: #ff4d4d;
+      --ok: #3ddc84;
+      --btn: rgba(255,255,255,.10);
+      --btn2: rgba(255,255,255,.16);
+      --field: rgba(0,0,0,.25);
+    }
+
+    *{ box-sizing: border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+      background: radial-gradient(1200px 700px at 50% -10%, rgba(255,255,255,.09), transparent 60%),
+                  linear-gradient(180deg, #07070a 0%, #0b0b0f 60%, #060609 100%);
+      color: var(--text);
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;            /* ✅ wichtig: nicht vertikal "festklemmen" */
+      padding:20px 12px 40px;
+      overflow:auto;                    /* ✅ falls nötig, body darf scrollen */
+    }
+
+    /* ✅ Phone wird viewport-hoch + innen scrollt es */
+    .phone{
+      width:min(460px, 96vw);
+      height: calc(100dvh - 40px);      /* ✅ iOS: dynamic viewport height */
+      max-height: calc(100vh - 40px);   /* fallback */
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+      overflow: hidden;                /* bleibt: Rahmen bleibt clean */
+      display:flex;
+      flex-direction:column;
+    }
+
+    /* ✅ Das hier ist der Scroll-Bereich */
+    .screen{
+      overflow-y:auto;
+      -webkit-overflow-scrolling: touch; /* ✅ iOS smooth scrolling */
+      height: 100%;
+      padding-bottom: 18px;
+    }
+
+    .topbar{
+      padding: 18px 18px 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      flex: 0 0 auto;
+    }
+    .topbar__title{
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing:.2px;
+    }
+    .topbar__sub{
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted2);
+      line-height: 1.35;
+    }
+
+    .panel{
+      padding: 16px 14px 6px;
+    }
+    .panel__title{
+      margin: 0 0 10px 4px;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 18px;
+      padding: 14px;
+      margin: 10px 0;
+    }
+    .card--center{ text-align:center; }
+
+    .card__heading{
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text);
+      margin-bottom: 12px;
+      position: relative;
+      display:inline-block;
+      padding-right: 10px;
+    }
+    .card__heading::after{
+      content:"";
+      position:absolute;
+      left:0;
+      right:-1000px;
+      top: 52%;
+      height:1px;
+      background: rgba(255,255,255,.10);
+      z-index:-1;
+    }
+
+    /* --- editor --- */
+    .editor-grid{
+      display:grid;
+      gap: 12px;
+    }
+
+    .fields{
+      display:grid;
+      gap: 10px;
+    }
+    .field{
+      display:grid;
+      gap: 6px;
+    }
+    .field label{
+      font-size: 12px;
+      color: var(--muted2);
+      font-weight: 800;
+      letter-spacing:.2px;
+    }
+    .field input{
+      width:100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: var(--field);
+      color: var(--text);
+      outline: none;
+      font-weight: 800;
+    }
+    .field input::placeholder{ color: rgba(255,255,255,.35); }
+    .row2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .btnbar{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .btn{
+      border: 1px solid rgba(255,255,255,.12);
+      background: var(--btn);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 900;
+      cursor: pointer;
+      user-select:none;
+    }
+    .btn:hover{ background: var(--btn2); }
+    .btn--ok{ border-color: rgba(61,220,132,.35); }
+    .btn--danger{ border-color: rgba(255,77,77,.35); }
+
+    .hint{
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted2);
+      line-height: 1.35;
+    }
+
+    /* --- party table --- */
+    .ptable{
+      width:100%;
+      border-collapse: separate;
+      border-spacing: 0 10px;
+      min-width: 420px; /* ✅ damit horizontal scroll in table möglich ist */
+    }
+    .prow{
+      background: rgba(0,0,0,.22);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .ptable td{
+      padding: 10px 8px;
+      vertical-align: middle;
+    }
+    .pbox{
+      width: 100%;
+      padding: 10px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      font-weight: 800;
+      outline: none;
+    }
+    .pcolor{
+      width: 44px;
+      height: 40px;
+      padding: 0;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: transparent;
+    }
+    .pcheck{
+      transform: scale(1.25);
+      accent-color: #ffffff;
+    }
+    .trash{
+      background: transparent;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      padding: 9px 10px;
+      font-weight: 900;
+      color: rgba(255,255,255,.85);
+      cursor:pointer;
+    }
+    .trash:hover{
+      border-color: rgba(255,77,77,.40);
+      color: #ffd0d0;
+    }
+
+    /* --- Regierung UI (Anzeige) --- */
+    .row{
+      display:flex;
+      align-items:center;
+      gap: 12px;
+    }
+    .row--big{ padding: 4px 0 2px; }
+    .icon{
+      width: 54px;
+      height: 54px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.40);
+      border: 1px solid rgba(255,255,255,.10);
+      display:grid;
+      place-items:center;
+      color: rgba(255,255,255,.85);
+    }
+    .row__title{
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.05;
+    }
+    .row__subtitle{
+      margin-top: 4px;
+      font-size: 15px;
+      color: var(--muted);
+    }
+
+    .party-list{ display:flex; flex-direction:column; gap:10px; margin-top:4px; }
+    .party-item{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      padding: 10px 10px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.22);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .party-item__left{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+    }
+    .party-pill{
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
+      display:grid;
+      place-items:center;
+      font-weight: 900;
+    }
+    .party-name{
+      font-size: 18px;
+      font-weight: 900;
+    }
+    .party-lean{
+      margin-top: 2px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .chev{
+      color: rgba(255,255,255,.35);
+      font-size: 22px;
+      user-select:none;
+    }
+
+    /* --- Parlament --- */
+    .seat-arc-wrap{
+      display:flex;
+      justify-content:center;
+      margin: 6px 0 6px;
+    }
+    .seat-arc{
+      width: 92%;
+      max-width: 380px;
+      height: auto;
+    }
+    .arc-outline{
+      fill:none;
+      stroke: rgba(255,255,255,.18);
+      stroke-width: 14;
+      stroke-linecap: butt;
+    }
+    .arc-seg{
+      fill:none;
+      stroke-width: 36;
+      stroke-linecap: butt;
+    }
+
+    .muted{
+      margin-top: 8px;
+      font-weight: 900;
+      font-size: 18px;
+    }
+
+    .legend{
+      margin-top: 12px;
+      display:grid;
+      gap: 10px;
+    }
+    .legend-row{
+      display:grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      align-items:end;
+    }
+    .legend-chip{
+      padding: 9px 0;
+      border-radius: 12px;
+      font-weight: 900;
+      border: 1px solid rgba(255,255,255,.10);
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      text-align:center;
+    }
+    .legend-num{
+      margin-top: 8px;
+      font-size: 18px;
+      font-weight: 900;
+      color: rgba(255,255,255,.80);
+      text-align:center;
+    }
+
+    /* --- Regierung & Opposition --- */
+    .split{
+      display:grid;
+      grid-template-columns: 120px 1fr 46px;
+      align-items:center;
+      gap: 12px;
+      padding: 10px 2px;
+    }
+    .split__label{
+      font-size: 20px;
+      font-weight: 900;
+    }
+    .split__value{
+      text-align:right;
+      font-size: 22px;
+      font-weight: 900;
+      color: rgba(255,255,255,.80);
+    }
+    .split__bar{
+      height: 54px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.25);
+      border: 1px solid rgba(255,255,255,.10);
+      display:flex;
+      overflow:hidden;
+    }
+    .split__seg{
+      height: 100%;
+    }
+
+    .footer{
+      padding: 14px 16px 18px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      color: var(--muted2);
+      font-size: 12px;
+    }
+    .footer code{ color: rgba(255,255,255,.78); }
+  </style>
+</head>
+
+<body>
+  <main class="phone">
+    <header class="topbar">
+      <div class="topbar__title">Politik-Übersicht</div>
+      <div class="topbar__sub">
+        Oben editieren → unten live Vorschau.<br/>
+        (Ausrichtung ist absichtlich entfernt.)
+      </div>
+    </header>
+
+    <!-- ✅ Scroll Container -->
+    <div class="screen">
+      <!-- EDITOR -->
+      <section class="panel">
+        <h2 class="panel__title">Editor</h2>
+
+        <div class="card">
+          <div class="card__heading">Basis</div>
+
+          <div class="editor-grid">
+            <div class="fields">
+              <div class="row2">
+                <div class="field">
+                  <label for="inpLeaderName">Regierungschef</label>
+                  <input id="inpLeaderName" placeholder="z.B. Markus Söder" />
+                </div>
+                <div class="field">
+                  <label for="inpLeaderRole">Titel</label>
+                  <input id="inpLeaderRole" placeholder="z.B. Ministerpräsident" />
+                </div>
+              </div>
+
+              <div class="row2">
+                <div class="field">
+                  <label for="inpTotalSeats">Sitze im Parlament</label>
+                  <input id="inpTotalSeats" type="number" min="1" step="1" />
+                </div>
+                <div class="field">
+                  <label>Hinweis</label>
+                  <input value="Parteien unten editieren" disabled />
+                </div>
+              </div>
+            </div>
+
+            <div class="btnbar">
+              <button class="btn btn--ok" id="btnAddParty">+ Partei hinzufügen</button>
+              <button class="btn" id="btnNormalize">Sitze = Gesamt anpassen</button>
+              <button class="btn btn--danger" id="btnLoadExample">Beispiel laden</button>
+            </div>
+
+            <div class="hint">
+              * „Sitze = Gesamt anpassen“ skaliert die Parteisitze proportional auf die Landtagsgröße,
+              wenn du z.B. neue Werte reinklopfst.
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__heading">Parteien (editierbar)</div>
+
+          <div style="overflow-x:auto;">
+            <table class="ptable" id="partyTable" aria-label="Parteien bearbeiten"></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Regierung -->
+      <section class="panel">
+        <h2 class="panel__title">Regierung</h2>
+
+        <div class="card">
+          <div class="card__heading">Politiker</div>
+          <div class="row row--big">
+            <div class="icon" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M12 12a4.5 4.5 0 1 0-4.5-4.5A4.5 4.5 0 0 0 12 12Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z"/>
+              </svg>
+            </div>
+            <div class="row__text">
+              <div class="row__title" id="leaderName">—</div>
+              <div class="row__subtitle" id="leaderRole">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__heading">Regierungsparteien</div>
+          <div id="govPartiesList" class="party-list"></div>
+          <div class="hint" id="govHint"></div>
+        </div>
+      </section>
+
+      <!-- Parlament -->
+      <section class="panel">
+        <h2 class="panel__title">Parlament</h2>
+
+        <div class="card card--center">
+          <div class="seat-arc-wrap">
+            <svg id="seatArc" class="seat-arc" viewBox="0 0 600 360" role="img" aria-label="Sitzverteilung"></svg>
+          </div>
+
+          <div class="muted" id="seatsLabel">Sitze im Parlament: —</div>
+
+          <div class="legend" id="legend"></div>
+        </div>
+      </section>
+
+      <!-- Regierung & Opposition -->
+      <section class="panel">
+        <h2 class="panel__title">Regierung &amp; Opposition</h2>
+
+        <div class="card">
+          <div class="split">
+            <div class="split__label">Regierung</div>
+            <div class="split__bar" id="govBar"></div>
+            <div class="split__value" id="govCount">—</div>
+          </div>
+
+          <div class="split">
+            <div class="split__label">Opposition</div>
+            <div class="split__bar" id="oppBar"></div>
+            <div class="split__value" id="oppCount">—</div>
+          </div>
+
+          <div class="hint" id="seatSumHint"></div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        Alles läuft in <code>index.html</code>. Du kannst das Repo direkt als GitHub Pages deployen.
+      </footer>
+    </div>
+  </main>
+
+  <script>
+    // -----------------------------
+    // STARTDATEN (werden im Editor geändert)
+    // -----------------------------
+    let STATE = {
+      leader: { name: "Markus Söder", role: "Ministerpräsident" },
+      totalSeats: 203,
+      parties: [
+        { name: "Grüne", color: "#0a8a16", seats: 32, inGovernment: false },
+        { name: "SPD",   color: "#e00000", seats: 17, inGovernment: false },
+        { name: "CSU",   color: "#111111", seats: 85, inGovernment: true  },
+        { name: "FW",    color: "#ff8c00", seats: 37, inGovernment: true  },
+        { name: "AfD",   color: "#77c7ff", seats: 32, inGovernment: false }
+      ]
+    };
+
+    // -----------------------------
+    // helpers
+    // -----------------------------
+    function $(id){ return document.getElementById(id); }
+
+    function sumSeats(arr){ return arr.reduce((a,p)=>a + (Number(p.seats)||0), 0); }
+
+    function clampInt(n, min, max){
+      n = Number(n);
+      if (!Number.isFinite(n)) return min;
+      n = Math.round(n);
+      return Math.max(min, Math.min(max, n));
+    }
+
+    function textColorOn(bgHex){
+      const hex = (bgHex || "#000000").replace("#","").trim();
+      if (hex.length < 6) return "rgba(255,255,255,.92)";
+      const r = parseInt(hex.substring(0,2),16);
+      const g = parseInt(hex.substring(2,4),16);
+      const b = parseInt(hex.substring(4,6),16);
+      const lum = (0.2126*r + 0.7152*g + 0.0722*b) / 255;
+      return lum > 0.62 ? "rgba(0,0,0,.78)" : "rgba(255,255,255,.92)";
+    }
+
+    function polarToCartesian(cx, cy, r, angleDeg){
+      const rad = (angleDeg - 90) * Math.PI / 180;
+      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    }
+
+    function describeArc(cx, cy, r, startAngle, endAngle){
+      const start = polarToCartesian(cx, cy, r, endAngle);
+      const end   = polarToCartesian(cx, cy, r, startAngle);
+      const largeArcFlag = (endAngle - startAngle) <= 180 ? "0" : "1";
+      return `M ${start.x.toFixed(3)} ${start.y.toFixed(3)} A ${r} ${r} 0 ${largeArcFlag} 0 ${end.x.toFixed(3)} ${end.y.toFixed(3)}`;
+    }
+
+    function escapeHtml(s){
+      return String(s)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    // -----------------------------
+    // Editor UI
+    // -----------------------------
+    function renderEditor(){
+      $("inpLeaderName").value = STATE.leader.name;
+      $("inpLeaderRole").value = STATE.leader.role;
+      $("inpTotalSeats").value = STATE.totalSeats;
+
+      const table = $("partyTable");
+      table.innerHTML = "";
+
+      const head = document.createElement("tr");
+      head.innerHTML = `
+        <td style="color: rgba(255,255,255,.55); font-weight:900; font-size:12px;">Name</td>
+        <td style="color: rgba(255,255,255,.55); font-weight:900; font-size:12px;">Farbe</td>
+        <td style="color: rgba(255,255,255,.55); font-weight:900; font-size:12px;">Sitze</td>
+        <td style="color: rgba(255,255,255,.55); font-weight:900; font-size:12px; text-align:center;">Reg.</td>
+        <td style="color: rgba(255,255,255,.55); font-weight:900; font-size:12px; text-align:right;">&nbsp;</td>
+      `;
+      table.appendChild(head);
+
+      STATE.parties.forEach((p, idx) => {
+        const tr = document.createElement("tr");
+        tr.className = "prow";
+        tr.innerHTML = `
+          <td>
+            <input class="pbox" data-k="name" data-i="${idx}" value="${escapeHtml(p.name)}" />
+          </td>
+          <td style="width:72px;">
+            <input class="pcolor" type="color" data-k="color" data-i="${idx}" value="${p.color}" />
+          </td>
+          <td style="width:86px;">
+            <input class="pbox" type="number" min="0" step="1" data-k="seats" data-i="${idx}" value="${p.seats}" />
+          </td>
+          <td style="width:58px; text-align:center;">
+            <input class="pcheck" type="checkbox" data-k="inGovernment" data-i="${idx}" ${p.inGovernment ? "checked" : ""} />
+          </td>
+          <td style="width:64px; text-align:right;">
+            <button class="trash" data-action="delete" data-i="${idx}" title="Partei löschen">✕</button>
+          </td>
+        `;
+        table.appendChild(tr);
+      });
+
+      table.querySelectorAll("input").forEach(inp => {
+        inp.addEventListener("input", onPartyInputChange);
+        inp.addEventListener("change", onPartyInputChange);
+      });
+
+      table.querySelectorAll("button[data-action='delete']").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const i = Number(e.currentTarget.getAttribute("data-i"));
+          STATE.parties.splice(i, 1);
+          renderAll();
+        });
+      });
+    }
+
+    function onPartyInputChange(e){
+      const i = Number(e.target.getAttribute("data-i"));
+      const k = e.target.getAttribute("data-k");
+      if (!Number.isFinite(i) || !STATE.parties[i]) return;
+
+      if (k === "inGovernment"){
+        STATE.parties[i][k] = !!e.target.checked;
+      } else if (k === "seats"){
+        STATE.parties[i][k] = clampInt(e.target.value, 0, 1000000);
+      } else if (k === "color"){
+        STATE.parties[i][k] = e.target.value || "#777777";
+      } else if (k === "name"){
+        STATE.parties[i][k] = (e.target.value || "").trim() || "Partei";
+      }
+
+      renderAll(false);
+    }
+
+    function bindTopEditor(){
+      $("inpLeaderName").addEventListener("input", (e)=>{
+        STATE.leader.name = (e.target.value || "").trim() || "—";
+        renderDisplay();
+      });
+      $("inpLeaderRole").addEventListener("input", (e)=>{
+        STATE.leader.role = (e.target.value || "").trim() || "—";
+        renderDisplay();
+      });
+      $("inpTotalSeats").addEventListener("input", (e)=>{
+        STATE.totalSeats = clampInt(e.target.value, 1, 1000000);
+        renderAll(false);
+      });
+
+      $("btnAddParty").addEventListener("click", ()=>{
+        STATE.parties.push({
+          name: "Neue Partei",
+          color: "#bbbbbb",
+          seats: 0,
+          inGovernment: false
+        });
+        renderAll();
+      });
+
+      $("btnNormalize").addEventListener("click", ()=>{
+        normalizeSeatsToTotal();
+        renderAll();
+      });
+
+      $("btnLoadExample").addEventListener("click", ()=>{
+        STATE = {
+          leader: { name: "Markus Söder", role: "Ministerpräsident" },
+          totalSeats: 203,
+          parties: [
+            { name: "Grüne", color: "#0a8a16", seats: 32, inGovernment: false },
+            { name: "SPD",   color: "#e00000", seats: 17, inGovernment: false },
+            { name: "CSU",   color: "#111111", seats: 85, inGovernment: true  },
+            { name: "FW",    color: "#ff8c00", seats: 37, inGovernment: true  },
+            { name: "AfD",   color: "#77c7ff", seats: 32, inGovernment: false }
+          ]
+        };
+        renderAll();
+      });
+    }
+
+    function normalizeSeatsToTotal(){
+      const total = Math.max(1, Number(STATE.totalSeats) || 1);
+      const s = sumSeats(STATE.parties);
+      if (s === 0) return;
+
+      const scaled = STATE.parties.map((p, idx) => ({
+        idx,
+        name: p.name,
+        color: p.color,
+        inGovernment: p.inGovernment,
+        _raw: (p.seats / s) * total
+      }));
+
+      scaled.forEach(p => p.seats = Math.floor(p._raw));
+
+      let rest = total - scaled.reduce((a,p)=>a+p.seats,0);
+
+      scaled.sort((a,b)=>{
+        const ra = a._raw - Math.floor(a._raw);
+        const rb = b._raw - Math.floor(b._raw);
+        return rb - ra;
+      });
+
+      for (let i=0; i<scaled.length && rest>0; i++){
+        scaled[i].seats += 1;
+        rest -= 1;
+      }
+
+      scaled.sort((a,b)=>a.idx-b.idx);
+
+      STATE.parties = scaled.map(p => ({
+        name: p.name,
+        color: p.color,
+        seats: p.seats,
+        inGovernment: p.inGovernment
+      }));
+    }
+
+    // -----------------------------
+    // Anzeige-Render (Regierung/Parlament)
+    // -----------------------------
+    function renderDisplay(){
+      $("leaderName").textContent = STATE.leader.name || "—";
+      $("leaderRole").textContent = STATE.leader.role || "—";
+
+      const govWrap = $("govPartiesList");
+      govWrap.innerHTML = "";
+
+      const gov = STATE.parties.filter(p => p.inGovernment);
+      const govHint = $("govHint");
+
+      if (gov.length === 0){
+        govHint.textContent = "Keine Regierungspartei markiert (setze bei einer Partei den Haken „Reg.“).";
+      } else {
+        govHint.textContent = "";
+      }
+
+      gov.forEach(p => {
+        const item = document.createElement("div");
+        item.className = "party-item";
+
+        const left = document.createElement("div");
+        left.className = "party-item__left";
+
+        const pill = document.createElement("div");
+        pill.className = "party-pill";
+        pill.style.background = p.color;
+        pill.style.color = textColorOn(p.color);
+        pill.textContent = "›";
+
+        const text = document.createElement("div");
+        const name = document.createElement("div");
+        name.className = "party-name";
+        name.textContent = p.name;
+
+        const sub = document.createElement("div");
+        sub.className = "party-lean";
+        sub.textContent = "Regierungspartei";
+
+        text.appendChild(name);
+        text.appendChild(sub);
+
+        left.appendChild(pill);
+        left.appendChild(text);
+
+        const chev = document.createElement("div");
+        chev.className = "chev";
+        chev.textContent = "›";
+
+        item.appendChild(left);
+        item.appendChild(chev);
+        govWrap.appendChild(item);
+      });
+
+      $("seatsLabel").textContent = `Sitze im Parlament: ${STATE.totalSeats}`;
+    }
+
+    function renderSeatArc(){
+      const svg = $("seatArc");
+      svg.innerHTML = "";
+
+      const total = Math.max(1, Number(STATE.totalSeats) || 1);
+      const parties = STATE.parties.slice();
+
+      const sum = sumSeats(parties);
+      const scale = sum > 0 ? (total / sum) : 1;
+
+      const cx = 300, cy = 300;
+      const r = 190;
+
+      const outline = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      outline.setAttribute("d", describeArc(cx,cy,r,180,0));
+      outline.setAttribute("class", "arc-outline");
+      svg.appendChild(outline);
+
+      let angle = 180;
+      const gapDeg = 1.2;
+
+      parties.forEach((p, idx) => {
+        const seatsScaled = (Number(p.seats)||0) * scale;
+        const segDeg = (seatsScaled / total) * 180;
+        if (segDeg <= 0.0001) return;
+
+        const start = angle;
+        const end   = angle - segDeg;
+
+        const segStart = start - (idx === 0 ? 0 : gapDeg/2);
+        const segEnd   = end   + (idx === parties.length-1 ? 0 : gapDeg/2);
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", describeArc(cx,cy,r, segStart, segEnd));
+        path.setAttribute("class", "arc-seg");
+        path.setAttribute("stroke", p.color);
+
+        svg.appendChild(path);
+        angle = end;
+      });
+    }
+
+    function renderLegend(){
+      const legend = $("legend");
+      legend.innerHTML = "";
+
+      const parties = STATE.parties.slice();
+      const perRow = 5;
+      const rows = Math.ceil(parties.length / perRow);
+
+      for (let r=0; r<rows; r++){
+        const rowChips = document.createElement("div");
+        rowChips.className = "legend-row";
+
+        const rowNums = document.createElement("div");
+        rowNums.className = "legend-row";
+
+        const slice = parties.slice(r*perRow, r*perRow + perRow);
+        while (slice.length < perRow) slice.push(null);
+
+        slice.forEach(p => {
+          const chip = document.createElement("div");
+          chip.className = "legend-chip";
+
+          const num = document.createElement("div");
+          num.className = "legend-num";
+
+          if (!p){
+            chip.style.opacity = "0";
+            num.style.opacity = "0";
+            chip.textContent = "—";
+            num.textContent = "—";
+          } else {
+            chip.style.background = p.color;
+            chip.style.color = textColorOn(p.color);
+            chip.textContent = p.name;
+            num.textContent = Number(p.seats)||0;
+          }
+
+          rowChips.appendChild(chip);
+          rowNums.appendChild(num);
+        });
+
+        legend.appendChild(rowChips);
+        legend.appendChild(rowNums);
+      }
+    }
+
+    function buildSplitBar(containerId, parts){
+      const el = $(containerId);
+      el.innerHTML = "";
+      const total = parts.reduce((a,x)=>a + x.value, 0) || 1;
+
+      parts.forEach(part => {
+        const seg = document.createElement("div");
+        seg.className = "split__seg";
+        seg.style.width = `${(part.value / total) * 100}%`;
+        seg.style.background = part.color;
+        el.appendChild(seg);
+      });
+    }
+
+    function renderGovOpp(){
+      const gov = STATE.parties.filter(p => p.inGovernment);
+      const opp = STATE.parties.filter(p => !p.inGovernment);
+
+      const govCount = sumSeats(gov);
+      const oppCount = sumSeats(opp);
+
+      $("govCount").textContent = govCount;
+      $("oppCount").textContent = oppCount;
+
+      buildSplitBar("govBar", gov.map(p => ({ color:p.color, value:Number(p.seats)||0 })));
+      buildSplitBar("oppBar", opp.map(p => ({ color:p.color, value:Number(p.seats)||0 })));
+
+      const total = Math.max(1, Number(STATE.totalSeats) || 1);
+      const sum = sumSeats(STATE.parties);
+      const hint = $("seatSumHint");
+
+      if (sum !== total){
+        hint.innerHTML = `Achtung: Parteisitze (${sum}) ≠ Landtagsgröße (${total}).<br/>Diagramm skaliert optisch, aber du solltest angleichen (Button „Sitze = Gesamt anpassen“).`;
+      } else {
+        hint.textContent = "";
+      }
+    }
+
+    function renderAll(rebuildEditor=true){
+      if (rebuildEditor) renderEditor();
+      renderDisplay();
+      renderSeatArc();
+      renderLegend();
+      renderGovOpp();
+    }
+
+    bindTopEditor();
+    renderAll(true);
+  </script>
+</body>
+</html>
